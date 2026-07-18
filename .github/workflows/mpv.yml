@@ -211,6 +211,7 @@ jobs:
       - name: Prepare
         run: |
           echo "sha=${{ needs.params.outputs.sha }}" >> $GITHUB_ENV
+          echo "toolchain_base_sha=$(git -C mpv-winbuild-cmake rev-parse HEAD)" >> $GITHUB_ENV
           echo "short_time=$(date "+%Y-%m-%d")" >> $GITHUB_ENV
           echo "cache_suffix=$(date "+%Y-%m-%d")-${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_ENV
           sed -i '/ccache_conf.in/d'  mpv-winbuild-cmake/CMakeLists.txt
@@ -413,8 +414,9 @@ jobs:
           {
             echo "workflow_commit=$GITHUB_SHA"
             echo "mpv_ref=${{ inputs.mpv_ref }}"
-            echo "toolchain_ref=${{ inputs.toolchain_ref }}"
-            echo "--- toolchain ---"
+            echo "toolchain_requested_ref=${{ inputs.toolchain_ref }}"
+            echo "toolchain_base_sha=$toolchain_base_sha"
+            echo "--- toolchain after local patches ---"
             git -C mpv-winbuild-cmake remote get-url origin
             git -C mpv-winbuild-cmake rev-parse HEAD
             echo "--- source repositories ---"
