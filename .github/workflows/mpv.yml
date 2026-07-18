@@ -57,6 +57,14 @@ on:
       run_name:
         description: 'The name displayed in the list of workflow runs'
         required: false
+      mpv_ref:
+        description: 'Fixed mpv commit or ref for an auditable build'
+        required: true
+        default: '94335ab87ab225ca3e36e0faeac831639d3e1d4e'
+      toolchain_ref:
+        description: 'Fixed shinchiro/mpv-winbuild-cmake commit or ref'
+        required: true
+        default: '04283f7e911149809c46bc236a834cf7134ba133'
 
 jobs:
   params:
@@ -74,7 +82,7 @@ jobs:
             const commit = await github.rest.repos.getCommit({
               owner: 'mpv-player',
               repo: 'mpv',
-              ref: `master`
+              ref: `${{ inputs.mpv_ref }}`
             })
             core.setOutput('sha', String(commit.data.sha))
             
@@ -198,6 +206,7 @@ jobs:
         with:
           repository: shinchiro/mpv-winbuild-cmake
           path: mpv-winbuild-cmake
+          ref: ${{ inputs.toolchain_ref }}
           fetch-depth: 0
       - name: Prepare
         run: |
@@ -261,7 +270,7 @@ jobs:
 
 
       - name: Restore clang sysroot cache
-        if: ${{ inputs.compiler =='clang' }}
+        if: ${{ inputs.compiler =='clang' && inputs.needclean != true }}
         uses: actions/cache/restore@v6.1.0
         with: 
           path: ${{ github.workspace }}/mpv-winbuild-cmake/clang_root
@@ -270,6 +279,7 @@ jobs:
             ${{ matrix.bit }}-clang_root-${{ env.restore_suffix }}
 
       - name: Restore Rust Cache
+        if: ${{ inputs.needclean != true }}
         uses: actions/cache/restore@v6.1.0
         id: cache_rust
         with:
@@ -278,6 +288,7 @@ jobs:
           restore-keys: |
             rust-${{ env.restore_suffix }}
       - name: Restore Source Cache
+        if: ${{ inputs.needclean != true }}
         uses: actions/cache/restore@v6.1.0
         with:
           path: ${{ github.workspace }}/mpv-winbuild-cmake/src_packages
@@ -285,7 +296,7 @@ jobs:
           restore-keys: |
             source-${{ env.restore_suffix }}
       - name: Restore Toolchain Cache
-        if: ${{ env.toolchain_restore_key != '' }}
+        if: ${{ inputs.needclean != true && env.toolchain_restore_key != '' }}
         uses: actions/cache/restore@v6.1.0
         with:
           path: ${{ github.workspace }}/mpv-winbuild-cmake/build${{ matrix.bit }}
@@ -392,6 +403,29 @@ jobs:
             git am --3way ../compile-lgpl-libmpv.patch
           fi
           bash ../build.sh -t '${{ matrix.bit }}' -c '${{ inputs.compiler }}' -s "${{ matrix.lgpl == true && 'true' || 'false' }}"
+      - name: Capture source provenance
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -o pipefail
+          out="mpv-winbuild-cmake/build${{ matrix.bit }}/source-provenance.log"
+          mkdir -p "$(dirname "$out")"
+          {
+            echo "workflow_commit=$GITHUB_SHA"
+            echo "mpv_ref=${{ inputs.mpv_ref }}"
+            echo "toolchain_ref=${{ inputs.toolchain_ref }}"
+            echo "--- toolchain ---"
+            git -C mpv-winbuild-cmake remote get-url origin
+            git -C mpv-winbuild-cmake rev-parse HEAD
+            echo "--- source repositories ---"
+            (find mpv-winbuild-cmake/src_packages -type d -name .git -print0 2>/dev/null || true) |
+              while IFS= read -r -d '' gitdir; do
+                repo="${gitdir%/.git}"
+                echo "repository=$repo"
+                git -C "$repo" remote get-url origin || true
+                git -C "$repo" rev-parse HEAD || true
+              done
+          } > "$out"
       - name: Collect logs
         if: ${{ always() }}
         run: |
