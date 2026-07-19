@@ -65,6 +65,11 @@ on:
         description: 'Fixed shinchiro/mpv-winbuild-cmake commit or ref'
         required: true
         default: '04283f7e911149809c46bc236a834cf7134ba133'
+      source_bundle:
+        description: 'Upload a corresponding-source archive for the 64-bit LGPL build'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   params:
@@ -428,6 +433,40 @@ jobs:
                 git -C "$repo" rev-parse HEAD || true
               done
           } > "$out"
+      - name: Prepare corresponding source archive
+        if: ${{ always() && inputs.source_bundle == true && matrix.bit == '64' && matrix.lgpl == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="libmpv-corresponding-source-${{ needs.params.outputs.sha }}"
+          rm -rf "$bundle"
+          mkdir -p "$bundle/build-system" "$bundle/patches" "$bundle/build-logs"
+          cp -a mpv-winbuild-cmake/src_packages "$bundle/sources"
+          git -C mpv-winbuild-cmake archive HEAD | tar -x -C "$bundle/build-system"
+          git archive HEAD | tar -x -C "$bundle/patches"
+          git -C mpv-winbuild-cmake diff "$toolchain_base_sha" HEAD > "$bundle/patches/toolchain-local-patches.patch"
+          cp "mpv-winbuild-cmake/build${{ matrix.bit }}/source-provenance.log" "$bundle/build-logs/"
+          cp "mpv-winbuild-cmake/build${{ matrix.bit }}/packages/ffmpeg-prefix/src/ffmpeg-stamp/ffmpeg-configure-out.log" "$bundle/build-logs/" || true
+          cp "mpv-winbuild-cmake/build${{ matrix.bit }}/packages/mpv-prefix/src/mpv-stamp/mpv-configure-out.log" "$bundle/build-logs/" || true
+          cat > "$bundle/README.txt" <<EOF
+          Corresponding source archive for the 64-bit LGPL libmpv build.
+          Workflow commit: $GITHUB_SHA
+          MPV commit: ${{ inputs.mpv_ref }}
+          Toolchain base commit: $toolchain_base_sha
+          Toolchain after applied patches: $(git -C mpv-winbuild-cmake rev-parse HEAD)
+          The sources directory is copied from the successful build workspace.
+          Git metadata is excluded; exact repository commits are in build-logs/source-provenance.log.
+          EOF
+          7z a -t7z -mx=5 "${bundle}.7z" "$bundle" -xr!.git
+      - name: Upload corresponding source archive
+        uses: actions/upload-artifact@v7
+        if: ${{ always() && inputs.source_bundle == true && matrix.bit == '64' && matrix.lgpl == true }}
+        with:
+          name: 64-lgpl-corresponding-source
+          path: libmpv-corresponding-source-*.7z
+          archive: false
+          compression-level: 0
+          retention-days: 90
       - name: Collect logs
         if: ${{ always() }}
         run: |
