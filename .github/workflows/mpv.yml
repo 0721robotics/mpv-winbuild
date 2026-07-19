@@ -443,7 +443,7 @@ jobs:
           mkdir -p "$bundle/build-system" "$bundle/patches" "$bundle/build-logs"
           cp -a mpv-winbuild-cmake/src_packages "$bundle/sources"
           git -C mpv-winbuild-cmake archive HEAD | tar -x -C "$bundle/build-system"
-          git archive HEAD | tar -x -C "$bundle/patches"
+          git -c safe.directory="$GITHUB_WORKSPACE" archive HEAD | tar -x -C "$bundle/patches"
           git -C mpv-winbuild-cmake diff "$toolchain_base_sha" HEAD > "$bundle/patches/toolchain-local-patches.patch"
           cp "mpv-winbuild-cmake/build${{ matrix.bit }}/source-provenance.log" "$bundle/build-logs/"
           cp "mpv-winbuild-cmake/build${{ matrix.bit }}/packages/ffmpeg-prefix/src/ffmpeg-stamp/ffmpeg-configure-out.log" "$bundle/build-logs/" || true
