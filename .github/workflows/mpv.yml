@@ -442,6 +442,9 @@ jobs:
           rm -rf "$bundle"
           mkdir -p "$bundle/build-system" "$bundle/patches" "$bundle/build-logs"
           cp -a mpv-winbuild-cmake/src_packages "$bundle/sources"
+          # Generated compile_commands.json links can point into a deleted build
+          # directory. They are not source and make 7-Zip return a warning exit code.
+          find "$bundle/sources" -xtype l -print -delete
           git -C mpv-winbuild-cmake archive HEAD | tar -x -C "$bundle/build-system"
           git -c safe.directory="$GITHUB_WORKSPACE" archive HEAD | tar -x -C "$bundle/patches"
           git -C mpv-winbuild-cmake diff "$toolchain_base_sha" HEAD > "$bundle/patches/toolchain-local-patches.patch"
